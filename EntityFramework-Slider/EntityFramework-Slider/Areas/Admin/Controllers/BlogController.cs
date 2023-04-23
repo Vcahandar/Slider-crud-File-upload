@@ -3,6 +3,7 @@ using EntityFramework_Slider.Helpers;
 using EntityFramework_Slider.Models;
 using EntityFramework_Slider.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace EntityFramework_Slider.Areas.Admin.Controllers
 {
@@ -111,5 +112,88 @@ namespace EntityFramework_Slider.Areas.Admin.Controllers
                 throw;
             }
         }
+
+        [HttpGet]
+        public async Task<IActionResult> Edit(int? id)
+        {
+            if (id == null) return BadRequest();
+            Blog blog = await _context.Blogs.FirstOrDefaultAsync(m => m.Id == id);
+            if (blog is null) return NotFound();
+            return View(blog);
+        }
+
+
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit (int? id,Blog blog)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return View();
+                }
+
+                if (!blog.Photo.CheckFileType("image/"))
+                {
+                    ModelState.AddModelError("Photo", "File Type must be image");
+                    return View();
+                }
+
+
+                if (blog.Photo.CheckFileSize(500))
+                {
+                    ModelState.AddModelError("Photo", "Image Size must be max 200kb");
+                    return View();
+                }
+
+                if (id == null) return BadRequest();
+                Blog dbBlog = await _context.Blogs.FirstOrDefaultAsync(m => m.Id == id);
+                if (blog is null) return NotFound();
+                string oldPath = FileHelper.GetFilePath(_env.WebRootPath, "img", dbBlog.Image);
+
+                FileHelper.DeleteFile(oldPath);
+
+
+                string fileName = Guid.NewGuid().ToString() + "_" + blog.Photo.FileName;
+                string newPath = FileHelper.GetFilePath(_env.WebRootPath, "img", fileName);
+
+                using (FileStream stream = new FileStream(newPath, FileMode.Create))
+                {
+                    await blog.Photo.CopyToAsync(stream);
+                }
+
+                dbBlog.Image = fileName;
+
+
+                dbBlog.Header = blog.Header;
+                dbBlog.Description = blog.Description;
+                dbBlog.Date = blog.Date;
+
+                await _context.SaveChangesAsync();
+
+                return RedirectToAction(nameof(Index));
+
+
+            }
+            catch (Exception ex)
+            { 
+
+                throw;
+            }
+
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> Detail(int? id)
+        {
+            if(id == null) return BadRequest();
+            Blog blog = await _context.Blogs.FindAsync(id);
+            if (blog is null) return NotFound();
+            return View(blog);
+        }
+
+
     }
 }
